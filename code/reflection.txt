@@ -1,6 +1,39 @@
-Write your reflection here.
+What I learned
 
-See reflection.md for what makes a good reflection — be specific, use the
-terminology from this assignment (rerun, widget, return value, guard, bytes vs.
-text, decode, session state, initialise once, button-triggered, metric), and make
-it actionable.
+The biggest idea in this assignment was Streamlit's execution model: the whole script
+reruns top to bottom on every interaction. That one fact explained almost every design
+decision. In one_package.py, st.text_input returns an empty string on the first run, so
+without the guard (if package_data:) the app would call parse_packaging("") and raise a
+ValueError before anyone typed anything. Every input widget has a "nothing yet" return
+value ("" for a text box, None for a file uploader, False for a button), and I now think
+of the guard as the first line of work in any Streamlit app.
+
+In process_file.py I learned that st.file_uploader gives you bytes, not text, because it
+cannot know what kind of file was uploaded. I had to decode it with
+getvalue().decode("utf-8") before I could call splitlines(). I also learned that a text
+file ends with a newline, so the last "line" is blank, and that blank lines have to be
+skipped anywhere in the file, not just at the end. Writing the parsed packages with
+json.dump(packages, file, indent=4) showed me that JSON can hold a list of lists of
+dictionaries without any conversion.
+
+Where I struggled
+
+process_files.py was the hard part. At first it was not obvious to me why a normal
+counter variable would not work. Once I understood that files_processed = 0 is executed
+again on every rerun, the fix made sense: keep the counts and the history list in
+st.session_state and initialise them only once, when the key is not there yet. The
+second trap was less obvious: the uploader keeps its file across reruns, so processing
+"whenever there is a file" counts the same file again. Making the work button-triggered
+fixed that, because st.button is True only on the rerun its click caused. The order of
+the script also mattered: initialise state, update it on the click, then display the
+st.metric cards from state, so the metrics show the new totals on the same run.
+
+What I will practice next
+
+1. I am still not fully comfortable predicting what a widget returns on each rerun. I
+   will rebuild 2-counter-wrong.py and 2-counter-session.py from memory and add
+   st.write(st.session_state) to watch the state change after each click.
+2. I want to add the optional Reset button to process_files.py to test whether I really
+   understand how to clear session state.
+3. I will read the streamlit.testing AppTest docs and tests/helpers.py more closely so I
+   can write my own behaviour tests instead of only running the ones provided.

@@ -20,21 +20,51 @@ Run it:  Run and Debug -> "Streamlit Run: Current File"   (see README Reference 
 Test it: pytest tests/test_streamlit.py -k process_files
 """
 
-# --- The page ---------------------------------------------------------------------
-#
-# No scaffolding. You have written two of these now, and this one does the same
-# processing as process_file.py — the difference is that it remembers.
-#
-# What you have to work out for yourself:
-#
-#   - the three parts of the session-state pattern: initialise once, update on the
-#     click, display from state — README Reference #6
-#   - a button, key="process", so that choosing a file and clicking are two
-#     different things
-#   - two st.metric cards, "Files processed" and "Packages processed", side by side
-#     in st.columns(2), on the page from the first run
-#   - one st.info line per file processed so far, kept in a list
-#
-# README Step 7 names the two traps. The tests are built around them: choosing a
-# file without clicking must change nothing, and a rerun with the same file still
-# chosen must not count it again.
+import json
+
+import streamlit as st
+
+from packaging_parser import parse_packaging
+
+
+def process_upload(uploaded_file) -> tuple[int, str]:
+    """Parse every non-blank line of an uploaded file and write the packages to JSON.
+
+    Returns the number of packages written and the name of the JSON file.
+    """
+    text = uploaded_file.getvalue().decode("utf-8")
+    packages = [parse_packaging(line.strip()) for line in text.splitlines() if line.strip()]
+
+    json_filename = "data/" + uploaded_file.name.replace(".txt", ".json")
+    with open(json_filename, "w") as json_file:
+        json.dump(packages, json_file, indent=4)
+
+    return len(packages), json_filename
+
+
+# 1. Initialise once — these keys only get created on the very first run.
+if "files_processed" not in st.session_state:
+    st.session_state.files_processed = 0
+    st.session_state.packages_processed = 0
+    st.session_state.history = []
+
+st.title("Process Package Files")
+
+uploaded_file = st.file_uploader("Upload package file:", key="package_file")
+clicked = st.button("Process file", key="process")
+
+# 2. Update on the click. The button is True only on the rerun the click caused,
+#    so a file left in the uploader is never counted twice.
+if clicked and uploaded_file:
+    package_count, json_filename = process_upload(uploaded_file)
+    st.session_state.files_processed += 1
+    st.session_state.packages_processed += package_count
+    st.session_state.history.append(f"{package_count} packages written to {json_filename}")
+
+# 3. Display from state, on every run.
+files_col, packages_col = st.columns(2)
+files_col.metric("Files processed", st.session_state.files_processed)
+packages_col.metric("Packages processed", st.session_state.packages_processed)
+
+for summary in st.session_state.history:
+    st.info(summary)
